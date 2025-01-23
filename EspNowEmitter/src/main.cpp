@@ -1,90 +1,42 @@
 #include <Arduino.h>
 
 /*********
-  Rui Santos & Sara Santos - Random Nerd Tutorials
-  Complete project details at https://RandomNerdTutorials.com/esp-now-many-to-one-esp32/
-  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files.
-  The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+  Rui Santos
+  Complete project details at https://RandomNerdTutorials.com/esp32-relay-module-ac-web-server/
+  
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
 *********/
-#include <esp_now.h>
-#include <WiFi.h>
 
-// REPLACE WITH THE RECEIVER'S MAC Address
-uint8_t broadcastAddress[] = {0x24, 0xdc, 0xc3, 0x14, 0x3d, 0x94};
+/*
+  Turns on an Electromagnet on for one second, then off for one second, repeatedly.
+  This example code is in the public domain.
+*/
 
-// Structure example to send data
-// Must match the receiver structure
-typedef struct struct_message
-{
-  int id; // must be unique for each sender board
-  int x;
-  int y;
-  char name[32];
-} struct_message;
+int Electromagnet = 25;
+int PlaceholderButton = 4;
 
-// Create a struct_message called myData
-struct_message myData;
+int buttonState = 0;
 
-// Create peer interface
-esp_now_peer_info_t peerInfo;
 
-// callback when data is sent
-void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
-{
-  Serial.print("\r\nLast Packet Send Status:\t");
-  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
-}
-
-void setup()
-{
-  // Init Serial Monitor
+// the setup routine runs once when you press reset:
+void setup() {
   Serial.begin(115200);
-
-  // Set device as a Wi-Fi Station
-  WiFi.mode(WIFI_STA);
-
-  // Init ESP-NOW
-  if (esp_now_init() != ESP_OK)
-  {
-    Serial.println("Error initializing ESP-NOW");
-    return;
-  }
-
-  // Once ESPNow is successfully Init, we will register for Send CB to
-  // get the status of Trasnmitted packet
-  esp_now_register_send_cb(OnDataSent);
-
-  // Register peer
-  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
-  peerInfo.channel = 0;
-  peerInfo.encrypt = false;
-
-  // Add peer
-  if (esp_now_add_peer(&peerInfo) != ESP_OK)
-  {
-    Serial.println("Failed to add peer");
-    return;
-  }
+  // initialize the digital pin as an output.
+  pinMode(Electromagnet, OUTPUT);
+  pinMode(PlaceholderButton, INPUT);
 }
 
-void loop()
-{
-  // Set values to send
-  myData.id = 1;
-  myData.x = random(0, 50);
-  myData.y = random(0, 50);
-  strcpy(myData.name, "Coucou");
+// the loop routine runs over and over again forever:
+void loop() {
+  buttonState=digitalRead(PlaceholderButton);
+  Serial.println(buttonState);
 
-  // Send message via ESP-NOW
-  esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&myData, sizeof(myData));
-
-  if (result == ESP_OK)
-  {
-    Serial.println("Sent with success");
+  if(buttonState != HIGH){
+    digitalWrite(Electromagnet, HIGH);   // turn the Electromagnet on (HIGH is the voltage level)
   }
-  else
-  {
-    Serial.println("Error sending the data");
+  else {
+    digitalWrite(Electromagnet, LOW);    // turn the Electromagnet off by making the voltage LOW
   }
-  delay(10000);
+  delay(1000); // wait for a second
 }
