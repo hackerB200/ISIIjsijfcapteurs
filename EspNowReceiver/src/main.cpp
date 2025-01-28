@@ -1,60 +1,150 @@
 #include <Arduino.h>
-/*********
-  Rui Santos & Sara Santos - Random Nerd Tutorials
-  Complete project details at https://RandomNerdTutorials.com/esp-now-many-to-one-esp32/
-  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files.
-  The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-*********/
+#include <MFRC522.h>
 #include <esp_now.h>
 #include <WiFi.h>
+#include <PubSubClient.h>
+#include <iostream>
+#include <string>
+#include <ArduinoJson.h>
 
-// Structure example to receive data
-// Must match the sender structure
-typedef struct struct_message
+// MQTT
+const char *mqtt_server = "192.168.3.98";
+WiFiClient espClient;
+PubSubClient client(espClient);
+long lastMsg = 0;
+char msg[50];
+int value = 0;
+
+// Wifi
+const char *ssid = "iot";
+const char *password = "iotisis;";
+
+// ESP-NOW
+const int nodes_nb = 1;
+uint8_t broadcastAddresses[nodes_nb][6] = {
+    {0x24, 0xdc, 0xc3, 0x14, 0x40, 0xac}};
+esp_now_peer_info_t peerInfo[nodes_nb];
+
+// Variable to sent about the door
+boolean openTheDoor = false;
+
+// Variable rfid_message to store the message
+String rfid_message;
+
+void espnowSendDoorStatus()
 {
-  int id;
-  int x;
-  int y;
-  char name[32];
-} struct_message;
+  // Send message via ESP-NOW
+  for (int i = 0; i < nodes_nb; i++)
+  {
+    esp_err_t result = esp_now_send(broadcastAddresses[i], (uint8_t *)&openTheDoor, sizeof(openTheDoor));
+    if (result == ESP_OK)
+    {
+      Serial.println("Sent with success");
+    }
+    else
+    {
+      Serial.println("Error sending the data");
+    }
+  }
+}
 
-// Create a struct_message called myData
-struct_message myData;
-
-// Create a structure to hold the readings from each board
-struct_message board1;
-struct_message board2;
-struct_message board3;
-
-// Create an array with all the structures
-struct_message boardsStruct[3] = {board1, board2, board3};
-
-// callback function that will be executed when data is received
-void OnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len)
+// Callback function to receive the message from the MQTT broker
+void mqttCallback(char *topic, byte *message, unsigned int length)
 {
+  Serial.print("Message arrived on topic: ");
+  Serial.print(topic);
+  Serial.print(". Message: ");
+
+  StaticJsonDocument<256> jsonMessage;
+  DeserializationError error = deserializeJson(jsonMessage, message);
+  if (error)
+  {
+    Serial.print(F("Erreur de parsing JSON: "));
+    Serial.println(error.c_str());
+    return;
+  }
+  Serial.println(jsonMessage.as<String>());
+
+  if (String(topic) == "/authorized")
+  {
+    bool isAuthorized = jsonMessage["isAuthorized"];
+    if (isAuthorized == 1)
+    {
+      Serial.println("Authorized tag detected");
+      openTheDoor = true;
+    }
+    else
+    {
+      Serial.println("Unauthorized tag detected");
+      openTheDoor = false;
+    }
+    espnowSendDoorStatus(); // Send the door status to the nodes
+  }
+}
+
+void mqttReconnect()
+{
+  // Loop until we're reconnected
+  while (!client.connected())
+  {
+    Serial.print("Attempting MQTT connection...");
+    // Attempt to connect
+    if (client.connect("ESP32Client"))
+    {
+      Serial.println("connected");
+      // Subscribe to topics
+      client.subscribe("/authorized");
+    }
+    else
+    {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+  }
+}
+
+// Callback when data is sent
+void espnowOnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
+{
+  Serial.print("\r\nLast Packet Send Status:\t");
+  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+}
+
+// Callback when data is received
+void espnowOnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len)
+{
+  Serial.print("Received data from: ");
   char macStr[18];
-  Serial.print("Packet received from: ");
   snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
            mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
   Serial.println(macStr);
-  memcpy(&myData, incomingData, sizeof(myData));
-  Serial.printf("Board ID %u: %u bytes\n", myData.id, len);
-  // Update the structures with the new incoming data
-  boardsStruct[myData.id - 1].x = myData.x;
-  boardsStruct[myData.id - 1].y = myData.y;
-  Serial.printf("x value: %d \n", boardsStruct[myData.id - 1].x);
-  Serial.printf("y value: %d \n", boardsStruct[myData.id - 1].y);
-  Serial.printf("name: %s \n", myData.name);
-  Serial.println();
+  memcpy(&rfid_message, incomingData, sizeof(rfid_message));
+  Serial.print("Bytes received: ");
+  Serial.println(len);
+  Serial.print("RFID Message: ");
+  Serial.println(rfid_message);
+
+  // publier le message sur le topic
+  client.publish("/security", rfid_message.c_str());
 }
 
 void setup()
 {
-  // Initialize Serial Monitor
   Serial.begin(115200);
 
   // Set device as a Wi-Fi Station
-  WiFi.mode(WIFI_STA);
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(1000);
+    Serial.println("Setting as a Wi-Fi Station..");
+  }
+  Serial.print("Wi-Fi Channel: ");
+  Serial.println(WiFi.channel());
 
   // Init ESP-NOW
   if (esp_now_init() != ESP_OK)
@@ -63,20 +153,36 @@ void setup()
     return;
   }
 
-  // Once ESPNow is successfully Init, we will register for recv CB to
-  // get recv packer info
-  esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
+  // Once ESPNow is successfully Init, we will register for Send CB to
+  // get the status of Trasnmitted packet
+  esp_now_register_send_cb(espnowOnDataSent);
+
+  // register peers (motes)
+  for (int i = 0; i < nodes_nb; i++)
+  {
+    // register peer
+    peerInfo[i].channel = 0;
+    peerInfo[i].encrypt = false;
+    memcpy(peerInfo[i].peer_addr, broadcastAddresses[i], 6);
+    if (esp_now_add_peer(&peerInfo[i]) != ESP_OK)
+    {
+      Serial.println("Failed to add peer");
+      return;
+    }
+  }
+
+  // Register for a callback function that will be called when data is received
+  esp_now_register_recv_cb(esp_now_recv_cb_t(espnowOnDataRecv));
+
+  client.setServer(mqtt_server, 1883);
+  client.setCallback(mqttCallback);
 }
 
 void loop()
 {
-  // Acess the variables for each board
-  /*int board1X = boardsStruct[0].x;
-  int board1Y = boardsStruct[0].y;
-  int board2X = boardsStruct[1].x;
-  int board2Y = boardsStruct[1].y;
-  int board3X = boardsStruct[2].x;
-  int board3Y = boardsStruct[2].y;*/
-
-  delay(10000);
+  if (!client.connected())
+  {
+    mqttReconnect();
+  }
+  client.loop();
 }
