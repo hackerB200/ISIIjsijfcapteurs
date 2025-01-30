@@ -6,6 +6,15 @@
 #include <iostream>
 #include <string>
 #include <ArduinoJson.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// OLED display
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
 // MQTT
 const char *mqtt_server = "192.168.3.98";
@@ -20,23 +29,47 @@ const char *ssid = "iot";
 const char *password = "iotisis;";
 
 // ESP-NOW
-const int nodes_nb = 1;
+const int nodes_nb = 2;
 uint8_t broadcastAddresses[nodes_nb][6] = {
-    {0x24, 0xdc, 0xc3, 0x14, 0x40, 0xac}};
+    {0x24, 0xdc, 0xc3, 0x14, 0x40, 0xac},
+    {0xc4, 0xde, 0xe2, 0xae, 0xd6, 0xe4}};
 esp_now_peer_info_t peerInfo[nodes_nb];
 
-// Variable to sent about the door
-boolean openTheDoor = false;
+// SENDING data
+typedef struct sinkToNode
+{
+  boolean openTheDoor = false;
+  String staffName = "";
+} struct_sinkToNode;
+sinkToNode sinkToNodeData;
 
-// Variable rfid_message to store the message
-String rfid_message;
+// RECEIVING data
+typedef struct nodeToSink
+{
+  int nodeId;
+  boolean emergencyRequested;
+  boolean doorOpen;
+  boolean closeRequested;
+  String rfidMessage;
+} struct_nodeToSink;
+nodeToSink nodeToSinkData;
+
+void writeToDisplay(String message)
+{
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setTextColor(WHITE);
+  display.setCursor(0, 0);
+  display.println(message);
+  display.display();
+}
 
 void espnowSendDoorStatus()
 {
   // Send message via ESP-NOW
   for (int i = 0; i < nodes_nb; i++)
   {
-    esp_err_t result = esp_now_send(broadcastAddresses[i], (uint8_t *)&openTheDoor, sizeof(openTheDoor));
+    esp_err_t result = esp_now_send(broadcastAddresses[i], (uint8_t *)&sinkToNodeData, sizeof(sinkToNode));
     if (result == ESP_OK)
     {
       Serial.println("Sent with success");
@@ -65,18 +98,35 @@ void mqttCallback(char *topic, byte *message, unsigned int length)
   }
   Serial.println(jsonMessage.as<String>());
 
-  if (String(topic) == "/authorized")
+  if (String(topic) == "/security/authorized")
   {
     bool isAuthorized = jsonMessage["isAuthorized"];
     if (isAuthorized == 1)
     {
       Serial.println("Authorized tag detected");
-      openTheDoor = true;
+      sinkToNodeData.openTheDoor = true;
+      writeToDisplay((jsonMessage["user"].as<String>()) + " authorized");
     }
     else
     {
       Serial.println("Unauthorized tag detected");
-      openTheDoor = false;
+      sinkToNodeData.openTheDoor = false;
+      writeToDisplay("Unauthorized staff member");
+    }
+    espnowSendDoorStatus(); // Send the door status to the nodes
+  }
+  else if (String(topic) == "/emergency/action")
+  {
+    bool emergencyOpen = jsonMessage["emergencyOpen"];
+    if (emergencyOpen == 1)
+    {
+      Serial.println("Emergency opening requested");
+      sinkToNodeData.openTheDoor = true;
+    }
+    else
+    {
+      Serial.println("Emergency opening canceled");
+      sinkToNodeData.openTheDoor = false;
     }
     espnowSendDoorStatus(); // Send the door status to the nodes
   }
@@ -84,23 +134,21 @@ void mqttCallback(char *topic, byte *message, unsigned int length)
 
 void mqttReconnect()
 {
-  // Loop until we're reconnected
   while (!client.connected())
   {
     Serial.print("Attempting MQTT connection...");
-    // Attempt to connect
     if (client.connect("ESP32Client"))
     {
       Serial.println("connected");
       // Subscribe to topics
-      client.subscribe("/authorized");
+      client.subscribe("/security/authorized");
+      client.subscribe("/emergency/action");
     }
     else
     {
       Serial.print("failed, rc=");
       Serial.print(client.state());
       Serial.println(" try again in 5 seconds");
-      // Wait 5 seconds before retrying
       delay(5000);
     }
   }
@@ -121,21 +169,46 @@ void espnowOnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int 
   snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
            mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
   Serial.println(macStr);
-  memcpy(&rfid_message, incomingData, sizeof(rfid_message));
+  memcpy(&nodeToSinkData, incomingData, sizeof(nodeToSink));
   Serial.print("Bytes received: ");
   Serial.println(len);
-  Serial.print("RFID Message: ");
-  Serial.println(rfid_message);
+  Serial.print("Node ID: ");
+  Serial.println(nodeToSinkData.nodeId);
 
-  // publier le message sur le topic
-  client.publish("/security", rfid_message.c_str());
+  if (nodeToSinkData.nodeId == 1) // RFID node
+  {
+    Serial.println("RFID message: ");
+    Serial.println(nodeToSinkData.rfidMessage);
+    client.publish("/security/staff", nodeToSinkData.rfidMessage.c_str());
+  }
+  else if (nodeToSinkData.nodeId == 2) // Electromagnet node
+  {
+    if (nodeToSinkData.emergencyRequested) // Emergency opening request
+    {
+      Serial.println("Emergency request: ");
+      Serial.println(nodeToSinkData.emergencyRequested);
+      client.publish("/emergency/alert", "Emergency opening requested");
+    }
+    else if (nodeToSinkData.closeRequested) // Door closing request
+    {
+      Serial.println("Door closing request: ");
+      Serial.println(nodeToSinkData.closeRequested);
+      client.publish("/security/close", "Closing requested");
+    }
+    else // Door status changed
+    {
+      Serial.println("New door status: ");
+      Serial.println(nodeToSinkData.doorOpen);
+      client.publish("/security/alert", (nodeToSinkData.doorOpen) ? "Door open" : "Door closed");
+    }
+  }
 }
 
 void setup()
 {
   Serial.begin(115200);
 
-  // Set device as a Wi-Fi Station
+  // Wi-Fi
   WiFi.mode(WIFI_AP_STA);
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED)
@@ -146,21 +219,15 @@ void setup()
   Serial.print("Wi-Fi Channel: ");
   Serial.println(WiFi.channel());
 
-  // Init ESP-NOW
+  // ESP-NOW
   if (esp_now_init() != ESP_OK)
   {
     Serial.println("Error initializing ESP-NOW");
     return;
   }
-
-  // Once ESPNow is successfully Init, we will register for Send CB to
-  // get the status of Trasnmitted packet
   esp_now_register_send_cb(espnowOnDataSent);
-
-  // register peers (motes)
   for (int i = 0; i < nodes_nb; i++)
   {
-    // register peer
     peerInfo[i].channel = 0;
     peerInfo[i].encrypt = false;
     memcpy(peerInfo[i].peer_addr, broadcastAddresses[i], 6);
@@ -170,12 +237,21 @@ void setup()
       return;
     }
   }
-
-  // Register for a callback function that will be called when data is received
   esp_now_register_recv_cb(esp_now_recv_cb_t(espnowOnDataRecv));
 
+  // MQTT
   client.setServer(mqtt_server, 1883);
   client.setCallback(mqttCallback);
+
+  // OLED display
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
+  {
+    Serial.println(F("SSD1306 allocation failed"));
+    for (;;)
+      ;
+  }
+  display.clearDisplay();
+  display.display();
 }
 
 void loop()

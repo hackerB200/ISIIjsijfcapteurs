@@ -3,7 +3,6 @@
 #include <esp_now.h>
 #include <WiFi.h>
 
-// PIN Numbers : RESET + SDA
 #define RST_PIN 21
 #define SS_1_PIN 5
 
@@ -15,17 +14,28 @@ const char *password = "iotisis;";
 const int redLedPin = 26;   // RED LED
 const int greenLedPin = 25; // GREEN LED
 
-// Create an MFRC522 instance
 MFRC522 mfrc522;
 
-// REPLACE WITH THE MAC Address of your receiver
 uint8_t broadcastAddress[] = {0x24, 0xdc, 0xc3, 0x14, 0x3d, 0x94};
 
-// Sending data
-String rfid_message;
+// SENDING data
+typedef struct nodeToSink
+{
+  const int nodeId = 1;
+  const boolean emergencyRequested = false;
+  const boolean doorOpen = false;
+  const boolean closeRequested = false;
+  String rfidMessage = "";
+} struct_nodeToSink;
+nodeToSink nodeToSinkData;
 
 // RECEIVING data
-boolean openTheDoor = false;
+typedef struct sinkToNode
+{
+  boolean openTheDoor = false;
+  String staffName = "";
+} struct_sinkToNode;
+sinkToNode sinkToNodeData;
 
 esp_now_peer_info_t peerInfo;
 
@@ -64,7 +74,7 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
 // Callback when data is received
 void OnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len)
 {
-  memcpy(&openTheDoor, incomingData, sizeof(openTheDoor));
+  memcpy(&sinkToNodeData, incomingData, sizeof(sinkToNode));
   Serial.print("Received data from: ");
   char macStr[18];
   snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
@@ -72,7 +82,7 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len)
   Serial.println(macStr);
 
   Serial.print("Door Status: ");
-  if (openTheDoor)
+  if (sinkToNodeData.openTheDoor)
   {
     digitalWrite(greenLedPin, HIGH);
     digitalWrite(redLedPin, LOW);
@@ -113,29 +123,21 @@ void setup()
   Serial.print("Wi-Fi Channel: ");
   Serial.println(WiFi.channel());
 
-  // Init ESP-NOW
+  // ESP-NOW
   if (esp_now_init() != ESP_OK)
   {
     Serial.println("Error initializing ESP-NOW");
     return;
   }
-
-  // Once ESPNow is successfully Init, we will register for Send CB to
-  // get the status of Trasnmitted packet
   esp_now_register_send_cb(OnDataSent);
-
-  // Register peer
   memcpy(peerInfo.peer_addr, broadcastAddress, 6);
   peerInfo.channel = 0;
   peerInfo.encrypt = false;
-
-  // Add peer
   if (esp_now_add_peer(&peerInfo) != ESP_OK)
   {
     Serial.println("Failed to add peer");
     return;
   }
-  // Register for a callback function that will be called when data is received
   esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
 }
 
@@ -144,10 +146,10 @@ void loop()
   // Looking for new cards
   if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial())
   {
-    String uid_str = dump_byte_array(mfrc522.uid.uidByte, mfrc522.uid.size);
-    Serial.println(uid_str);
+    nodeToSinkData.rfidMessage = dump_byte_array(mfrc522.uid.uidByte, mfrc522.uid.size);
+    Serial.println(nodeToSinkData.rfidMessage);
     // Send RFID data via ESP-NOW
-    esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&uid_str, sizeof(uid_str));
+    esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&nodeToSinkData, sizeof(nodeToSink));
 
     if (result == ESP_OK)
     {
@@ -158,149 +160,7 @@ void loop()
       Serial.println("Error sending the data");
     }
 
-    // Halt PICC
     mfrc522.PICC_HaltA();
-    // Stop encryption on PCD
     mfrc522.PCD_StopCrypto1();
   }
 }
-
-// #include <Arduino.h>
-// /*********
-//   Rui Santos & Sara Santos - Random Nerd Tutorials
-//   Complete project details at https://RandomNerdTutorials.com/esp-now-many-to-one-esp32/
-//   Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files.
-//   The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-// *********/
-// #include <esp_now.h>
-// #include <WiFi.h>
-
-// // REPLACE WITH THE MAC Address of your receiver
-// uint8_t broadcastAddress[] = {0x24, 0xdc, 0xc3, 0x14, 0x3d, 0x94};
-
-// // Define variables to store BME280 readings to be sent
-// float temperature;
-// float humidity;
-// float pressure;
-
-// // Define variables to store incoming readings
-// float incomingTemp;
-// float incomingHum;
-// float incomingPres;
-
-// // Variable to store if sending data was successful
-// String success;
-
-// // Structure example to receive data
-// // Must match the sender structure
-// typedef struct struct_message
-// {
-//   float temp;
-//   float hum;
-//   float pres;
-//   unsigned int readingId;
-// } struct_message;
-
-// // Create a struct_message called BME280Readings to hold sensor readings
-// struct_message BME280Readings;
-
-// // Create a struct_message to hold incoming sensor readings
-// struct_message incomingReadings;
-
-// esp_now_peer_info_t peerInfo;
-
-// // Callback when data is sent
-// void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
-// {
-//   Serial.print("\r\nLast Packet Send Status:\t");
-//   Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
-//   if (status == 0)
-//   {
-//     success = "Delivery Success :)";
-//   }
-//   else
-//   {
-//     success = "Delivery Fail :(";
-//   }
-// }
-
-// // Callback when data is received
-// void OnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len)
-// {
-//   memcpy(&incomingReadings, incomingData, sizeof(incomingReadings));
-//   Serial.println("Received data from: ");
-//   char macStr[18];
-//   snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
-//            mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
-//   Serial.print(macStr);
-//   Serial.print("Bytes received: ");
-//   Serial.println(len);
-//   Serial.print("Temperature: ");
-//   Serial.println(incomingReadings.temp);
-//   Serial.print("Humidity: ");
-//   Serial.println(incomingReadings.hum);
-//   Serial.print("Pressure: ");
-//   Serial.println(incomingReadings.pres);
-//   incomingTemp = incomingReadings.temp;
-//   incomingHum = incomingReadings.hum;
-//   incomingPres = incomingReadings.pres;
-// }
-
-// void setup()
-// {
-//   // Init Serial Monitor
-//   Serial.begin(115200);
-
-//   // Set device as a Wi-Fi Station
-//   WiFi.mode(WIFI_STA);
-
-//   // Init ESP-NOW
-//   if (esp_now_init() != ESP_OK)
-//   {
-//     Serial.println("Error initializing ESP-NOW");
-//     return;
-//   }
-
-//   // Once ESPNow is successfully Init, we will register for Send CB to
-//   // get the status of Trasnmitted packet
-//   esp_now_register_send_cb(OnDataSent);
-
-//   // Register peer
-//   memcpy(peerInfo.peer_addr, broadcastAddress, 6);
-//   peerInfo.channel = 0;
-//   peerInfo.encrypt = false;
-
-//   // Add peer
-//   if (esp_now_add_peer(&peerInfo) != ESP_OK)
-//   {
-//     Serial.println("Failed to add peer");
-//     return;
-//   }
-//   // Register for a callback function that will be called when data is received
-//   esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
-// }
-
-// void loop()
-// {
-//   temperature = 100;
-//   humidity = 500;
-//   pressure = 10000;
-
-//   // Set values to send
-//   BME280Readings.temp = temperature;
-//   BME280Readings.hum = humidity;
-//   BME280Readings.pres = pressure;
-
-//   // Send message via ESP-NOW
-//   esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&BME280Readings, sizeof(BME280Readings));
-
-//   if (result == ESP_OK)
-//   {
-//     Serial.println("Sent with success");
-//   }
-//   else
-//   {
-//     Serial.println("Error sending the data");
-//   }
-//   delay(10000);
-// }
