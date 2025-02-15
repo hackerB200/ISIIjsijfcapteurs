@@ -1,0 +1,893 @@
+[
+    {
+        "id": "386d15c156dff535",
+        "type": "tab",
+        "label": "Flux 2",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "df15e9f68aa1a33f",
+        "type": "mqtt in",
+        "z": "386d15c156dff535",
+        "name": "",
+        "topic": "/security/staff",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "10e78a89.5b4fd5",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 110,
+        "y": 220,
+        "wires": [
+            [
+                "1b1d321e6d588d60"
+            ]
+        ]
+    },
+    {
+        "id": "1b1d321e6d588d60",
+        "type": "function",
+        "z": "386d15c156dff535",
+        "name": "check if authorized",
+        "func": "const authorized_people = {\n    \"Pierre\": \"b494885b\",\n//  \"Paul\": \"043f0c5e\",\n    \"Jacques\": \"0cc7b76e\"\n}\n\nlet uid_received = msg.payload\n\nmsg.payload = {\n    user : \"Unknown\",\n    isAuthorized : false\n}\n\nfor (let [name, uid] of Object.entries(authorized_people)) {\n    if (uid_received === uid) {\n        msg.payload.isAuthorized = true\n        msg.payload.user = name\n        break\n    }\n}\n\nif (msg.payload.isAuthorized) {\n    msg.display = `${msg.payload.user} (${uid_received}) has entered the room.`\n} else {\n    msg.display = `WARNING : Unauthorized access (${uid_received})!!`\n}\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 350,
+        "y": 220,
+        "wires": [
+            [
+                "1f3a962a21fc27b9",
+                "04654f61f8783033",
+                "f61dfa9af7fd1799",
+                "ae68dcd21a5f4f3c"
+            ]
+        ]
+    },
+    {
+        "id": "1f3a962a21fc27b9",
+        "type": "ui_text",
+        "z": "386d15c156dff535",
+        "group": "3e286582b92c720a",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "name": "",
+        "label": "Staff Detected",
+        "format": "{{msg.display}}",
+        "layout": "row-spread",
+        "className": "",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#000000",
+        "x": 560,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "04654f61f8783033",
+        "type": "mqtt out",
+        "z": "386d15c156dff535",
+        "name": "",
+        "topic": "/security/authorized",
+        "qos": "",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "10e78a89.5b4fd5",
+        "x": 570,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "ae68dcd21a5f4f3c",
+        "type": "debug",
+        "z": "386d15c156dff535",
+        "name": "debug 2",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 500,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "2301f2cd39c44c95",
+        "type": "mqtt in",
+        "z": "386d15c156dff535",
+        "name": "",
+        "topic": "/emergency/alert",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "10e78a89.5b4fd5",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 100,
+        "y": 760,
+        "wires": [
+            [
+                "a977f788ffa9d604",
+                "ce15ccee3e5dd643",
+                "4046eed669877a37"
+            ]
+        ]
+    },
+    {
+        "id": "a977f788ffa9d604",
+        "type": "function",
+        "z": "386d15c156dff535",
+        "name": "Open or close door",
+        "func": "const received = msg.payload\n\nmsg.payload = {\n    emergencyOpen: false\n}\n\nif (received == \"Emergency opening requested\") {\n    msg.display = \"Emergency opening requested\"\n    msg.payload.emergencyOpen = true\n} \n\nif (received == \"Closing requested\") {\n    msg.display = \"Closing requested\"\n    msg.payload.emergencyOpen = false\n}\n\nreturn msg\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 350,
+        "y": 760,
+        "wires": [
+            [
+                "223b65c371f3ea06"
+            ]
+        ]
+    },
+    {
+        "id": "ae0681d41f17286a",
+        "type": "mqtt out",
+        "z": "386d15c156dff535",
+        "name": "",
+        "topic": "/emergency/action",
+        "qos": "",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "10e78a89.5b4fd5",
+        "x": 1230,
+        "y": 800,
+        "wires": []
+    },
+    {
+        "id": "005ece952cb17a6f",
+        "type": "debug",
+        "z": "386d15c156dff535",
+        "name": "debug 4",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1200,
+        "y": 740,
+        "wires": []
+    },
+    {
+        "id": "0ac823b090a6351c",
+        "type": "mqtt in",
+        "z": "386d15c156dff535",
+        "name": "",
+        "topic": "/security/alert",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "10e78a89.5b4fd5",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 110,
+        "y": 1140,
+        "wires": [
+            [
+                "fa0e15581c68c152",
+                "c7be1c4d3443efcc"
+            ]
+        ]
+    },
+    {
+        "id": "fa0e15581c68c152",
+        "type": "function",
+        "z": "386d15c156dff535",
+        "name": "alert door open",
+        "func": "const received = msg.payload\nconst alertTimeout = ((flow.get('timeout')) == undefined? 10 : flow.get('timeout'))*1000;\n\nmsg.payload = {\n    alert: false,\n    test: alertTimeout\n}\n\nvar doorTimeout = context.get(\"doorTimeout\");\n\nif (received == \"Door open\") {\n    // Annuler un timeout en cours si la porte a été fermée puis réouverte\n    if (doorTimeout) {\n        clearTimeout(doorTimeout);\n    }\n\n    // Démarrer un timeout de 60 secondes\n    doorTimeout = setTimeout(() => {\n        msg.display = \"Alert\";\n        msg.payload.alert = true\n        node.send(msg); // send to the next node\n    }, alertTimeout);\n\n    // Sauvegarder le timeout en mémoire\n    context.set(\"doorTimeout\", doorTimeout);\n\n} else if (received == \"Door closed\") {\n    if (doorTimeout) {\n        clearTimeout(doorTimeout);\n        context.set(\"doorTimeout\", null);\n    }\n}\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 1140,
+        "wires": [
+            [
+                "f10ec9583b7bef08",
+                "ca90ef35c9918634"
+            ]
+        ]
+    },
+    {
+        "id": "9d8099b6d2c3edb2",
+        "type": "inject",
+        "z": "386d15c156dff535",
+        "name": "Authorized uid",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "0cc7b76e",
+        "payloadType": "str",
+        "x": 110,
+        "y": 300,
+        "wires": [
+            [
+                "1b1d321e6d588d60"
+            ]
+        ]
+    },
+    {
+        "id": "9eb576516e4158a0",
+        "type": "inject",
+        "z": "386d15c156dff535",
+        "name": "Unauthorized uid",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "0cc7b76f",
+        "payloadType": "str",
+        "x": 120,
+        "y": 360,
+        "wires": [
+            [
+                "1b1d321e6d588d60"
+            ]
+        ]
+    },
+    {
+        "id": "f779f20668702d92",
+        "type": "inject",
+        "z": "386d15c156dff535",
+        "name": "Emergency request",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "Emergency opening requested",
+        "payloadType": "str",
+        "x": 90,
+        "y": 820,
+        "wires": [
+            [
+                "a977f788ffa9d604"
+            ]
+        ]
+    },
+    {
+        "id": "0dbb54c75b46f106",
+        "type": "inject",
+        "z": "386d15c156dff535",
+        "name": "Alert Door Open",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "Door open",
+        "payloadType": "str",
+        "x": 140,
+        "y": 1200,
+        "wires": [
+            [
+                "fa0e15581c68c152"
+            ]
+        ]
+    },
+    {
+        "id": "b1d994fbb2413343",
+        "type": "inject",
+        "z": "386d15c156dff535",
+        "name": "Alert Door Closed",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "Door closed",
+        "payloadType": "str",
+        "x": 130,
+        "y": 1240,
+        "wires": [
+            [
+                "fa0e15581c68c152"
+            ]
+        ]
+    },
+    {
+        "id": "f10ec9583b7bef08",
+        "type": "debug",
+        "z": "386d15c156dff535",
+        "name": "debug 6",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 620,
+        "y": 1100,
+        "wires": []
+    },
+    {
+        "id": "62697f80b5b54e20",
+        "type": "ui_numeric",
+        "z": "386d15c156dff535",
+        "name": "",
+        "label": "Alert timeout (sec)",
+        "tooltip": "",
+        "group": "3e286582b92c720a",
+        "order": 3,
+        "width": 0,
+        "height": 0,
+        "wrap": false,
+        "passthru": true,
+        "topic": "timeout",
+        "topicType": "flow",
+        "format": "{{value}}",
+        "min": "10",
+        "max": "2000",
+        "step": "10",
+        "className": "",
+        "x": 150,
+        "y": 1300,
+        "wires": [
+            [
+                "d4f472208524697e"
+            ]
+        ]
+    },
+    {
+        "id": "39323e75f24641a8",
+        "type": "function",
+        "z": "386d15c156dff535",
+        "name": "send response in json",
+        "func": "const received = msg.payload\n\nmsg.payload = {\n    emergencyOpen: false\n}\n\nif (received == true) {\n    msg.payload.emergencyOpen = true\n} \n\nreturn msg\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 980,
+        "y": 800,
+        "wires": [
+            [
+                "ae0681d41f17286a",
+                "005ece952cb17a6f"
+            ]
+        ]
+    },
+    {
+        "id": "7486d4375d55033f",
+        "type": "ui_toast",
+        "z": "386d15c156dff535",
+        "position": "top right",
+        "displayTime": "5",
+        "highlight": "red",
+        "sendall": true,
+        "outputs": 0,
+        "ok": "OK",
+        "cancel": "",
+        "raw": false,
+        "className": "",
+        "topic": "",
+        "name": "Notification emergency open",
+        "x": 980,
+        "y": 580,
+        "wires": []
+    },
+    {
+        "id": "5fb4ddf919208718",
+        "type": "change",
+        "z": "386d15c156dff535",
+        "name": "Set notification info",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "display",
+                "tot": "msg"
+            },
+            {
+                "t": "set",
+                "p": "topic",
+                "pt": "msg",
+                "to": "WARNING",
+                "tot": "str"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 750,
+        "y": 620,
+        "wires": [
+            [
+                "7486d4375d55033f",
+                "36450f1450e3a190"
+            ]
+        ]
+    },
+    {
+        "id": "b6256111fe3f218b",
+        "type": "ui_button",
+        "z": "386d15c156dff535",
+        "name": "",
+        "group": "3e286582b92c720a",
+        "order": 4,
+        "width": 5,
+        "height": 1,
+        "passthru": true,
+        "label": "Open the door",
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "",
+        "className": "",
+        "icon": "",
+        "payload": "true",
+        "payloadType": "bool",
+        "topic": "payload.emergencyOpen",
+        "topicType": "msg",
+        "x": 760,
+        "y": 760,
+        "wires": [
+            [
+                "39323e75f24641a8"
+            ]
+        ]
+    },
+    {
+        "id": "d4f472208524697e",
+        "type": "change",
+        "z": "386d15c156dff535",
+        "name": "Set timeout",
+        "rules": [
+            {
+                "t": "set",
+                "p": "timeout",
+                "pt": "flow",
+                "to": "payload",
+                "tot": "msg"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 410,
+        "y": 1300,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "98afe75237dc82f3",
+        "type": "play audio",
+        "z": "386d15c156dff535",
+        "name": "Audio alert door open",
+        "voice": "1",
+        "x": 880,
+        "y": 1240,
+        "wires": []
+    },
+    {
+        "id": "ca90ef35c9918634",
+        "type": "change",
+        "z": "386d15c156dff535",
+        "name": "Set notification info",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "WARNING : the door is still open",
+                "tot": "str"
+            },
+            {
+                "t": "set",
+                "p": "topic",
+                "pt": "msg",
+                "to": "WARNING",
+                "tot": "str"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 630,
+        "y": 1180,
+        "wires": [
+            [
+                "98afe75237dc82f3",
+                "0ca8915e91718c18"
+            ]
+        ]
+    },
+    {
+        "id": "0ca8915e91718c18",
+        "type": "ui_toast",
+        "z": "386d15c156dff535",
+        "position": "top right",
+        "displayTime": "5",
+        "highlight": "orange",
+        "sendall": true,
+        "outputs": 0,
+        "ok": "OK",
+        "cancel": "",
+        "raw": false,
+        "className": "",
+        "topic": "",
+        "name": "Notification door open",
+        "x": 880,
+        "y": 1180,
+        "wires": []
+    },
+    {
+        "id": "36450f1450e3a190",
+        "type": "play audio",
+        "z": "386d15c156dff535",
+        "name": "Audio alert emergency open",
+        "voice": "1",
+        "x": 980,
+        "y": 620,
+        "wires": []
+    },
+    {
+        "id": "c7be1c4d3443efcc",
+        "type": "ui_text",
+        "z": "386d15c156dff535",
+        "group": "3e286582b92c720a",
+        "order": 2,
+        "width": 0,
+        "height": 0,
+        "name": "",
+        "label": "Door Status",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "className": "",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#000000",
+        "x": 390,
+        "y": 1080,
+        "wires": []
+    },
+    {
+        "id": "4046eed669877a37",
+        "type": "delay",
+        "z": "386d15c156dff535",
+        "name": "",
+        "pauseType": "delay",
+        "timeout": "3",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 260,
+        "y": 560,
+        "wires": [
+            [
+                "daa528e9c52ab866"
+            ]
+        ]
+    },
+    {
+        "id": "ce15ccee3e5dd643",
+        "type": "ui_text",
+        "z": "386d15c156dff535",
+        "group": "3e286582b92c720a",
+        "order": 6,
+        "width": 0,
+        "height": 0,
+        "name": "Emergency alert status",
+        "label": "",
+        "format": "{{msg.payload}}",
+        "layout": "row-left",
+        "className": "",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#000000",
+        "x": 680,
+        "y": 560,
+        "wires": []
+    },
+    {
+        "id": "daa528e9c52ab866",
+        "type": "change",
+        "z": "386d15c156dff535",
+        "name": "Clear text",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "",
+                "tot": "str"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 420,
+        "y": 560,
+        "wires": [
+            [
+                "ce15ccee3e5dd643"
+            ]
+        ]
+    },
+    {
+        "id": "55bae1b7740db4d8",
+        "type": "ui_toast",
+        "z": "386d15c156dff535",
+        "position": "top right",
+        "displayTime": "5",
+        "highlight": "blue",
+        "sendall": true,
+        "outputs": 0,
+        "ok": "OK",
+        "cancel": "",
+        "raw": false,
+        "className": "",
+        "topic": "",
+        "name": "Notification new staff detected",
+        "x": 1010,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "ba95f58feeb03286",
+        "type": "change",
+        "z": "386d15c156dff535",
+        "name": "Set notification info",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "display",
+                "tot": "msg"
+            },
+            {
+                "t": "set",
+                "p": "topic",
+                "pt": "msg",
+                "to": "WARNING",
+                "tot": "str"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 750,
+        "y": 220,
+        "wires": [
+            [
+                "55bae1b7740db4d8"
+            ]
+        ]
+    },
+    {
+        "id": "f61dfa9af7fd1799",
+        "type": "switch",
+        "z": "386d15c156dff535",
+        "name": "If Authorized",
+        "property": "payload.isAuthorized",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "false"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 1,
+        "x": 550,
+        "y": 220,
+        "wires": [
+            [
+                "ba95f58feeb03286"
+            ]
+        ]
+    },
+    {
+        "id": "df3798354736286f",
+        "type": "ui_button",
+        "z": "386d15c156dff535",
+        "name": "",
+        "group": "3e286582b92c720a",
+        "order": 5,
+        "width": 5,
+        "height": 1,
+        "passthru": true,
+        "label": "Close the door",
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "#e84646",
+        "className": "",
+        "icon": "",
+        "payload": "false",
+        "payloadType": "bool",
+        "topic": "payload",
+        "topicType": "msg",
+        "x": 760,
+        "y": 820,
+        "wires": [
+            [
+                "39323e75f24641a8"
+            ]
+        ]
+    },
+    {
+        "id": "98b055fd8e8d2282",
+        "type": "mqtt in",
+        "z": "386d15c156dff535",
+        "name": "",
+        "topic": "/security/close",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "10e78a89.5b4fd5",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 110,
+        "y": 940,
+        "wires": [
+            [
+                "a977f788ffa9d604"
+            ]
+        ]
+    },
+    {
+        "id": "223b65c371f3ea06",
+        "type": "switch",
+        "z": "386d15c156dff535",
+        "name": "Close/Open",
+        "property": "payload.emergencyOpen",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "true"
+            },
+            {
+                "t": "false"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 550,
+        "y": 760,
+        "wires": [
+            [
+                "5fb4ddf919208718",
+                "b6256111fe3f218b"
+            ],
+            [
+                "df3798354736286f"
+            ]
+        ]
+    },
+    {
+        "id": "10e78a89.5b4fd5",
+        "type": "mqtt-broker",
+        "name": "",
+        "broker": "localhost",
+        "port": "1883",
+        "clientid": "",
+        "usetls": false,
+        "compatmode": true,
+        "keepalive": "60",
+        "cleansession": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": ""
+    },
+    {
+        "id": "3e286582b92c720a",
+        "type": "ui_group",
+        "name": "Security Screen 1",
+        "tab": "6f8d1987cc2a031a",
+        "order": 1,
+        "disp": true,
+        "width": 10,
+        "collapse": false,
+        "className": ""
+    },
+    {
+        "id": "6f8d1987cc2a031a",
+        "type": "ui_tab",
+        "name": "Security Station",
+        "icon": "dashboard",
+        "order": 2,
+        "disabled": false,
+        "hidden": false
+    }
+]
